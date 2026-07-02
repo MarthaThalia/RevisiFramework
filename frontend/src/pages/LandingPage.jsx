@@ -170,7 +170,7 @@ export default function LandingPage() {
               <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-full px-4 py-1.5 mb-6">
                 <Waves className="w-4 h-4 text-blue-500" />
                 <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">
-                  Living Lab FTK — Undiksha
+                  Living Lab FTK - Undiksha
                 </span>
               </div>
 
