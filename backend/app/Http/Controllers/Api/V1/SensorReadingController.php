@@ -23,6 +23,11 @@ class SensorReadingController
     // Fungsi untuk menerima input dari form React dan menyimpannya ke database
     public function store(Request $request)
     {
+        // Merge JSON body explicitly so both JSON and form-data payloads work
+        if ($request->isJson()) {
+            $request->merge($request->json()->all());
+        }
+
         // 1. Validasi input yang masuk (Hanya 4 parameter mutlak)
         $validated = $request->validate([
             'pond_id' => 'nullable|integer', // Optional to fallback to default

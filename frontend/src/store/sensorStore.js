@@ -16,6 +16,7 @@ const useSensorStore = create((set, get) => ({
   readings: [],
   isLoading: false,
   error: null,
+  selectedReadingId: null,
 
   // ── Actions ──
 
@@ -172,6 +173,11 @@ const useSensorStore = create((set, get) => ({
    * Clears any displayed error (e.g. after user dismisses the toast).
    */
   clearError: () => set({ error: null }),
+
+  /**
+   * Sets the selected reading ID for classification details page.
+   */
+  setSelectedReadingId: (id) => set({ selectedReadingId: id }),
 }));
 
 export default useSensorStore;

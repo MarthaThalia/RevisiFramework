@@ -173,15 +173,17 @@ function ParamStatusBadge({ status }) {
    Main Classification Component
    ────────────────────────────────────────────── */
 export default function Classification() {
-  const { readings, isLoading, error, fetchReadings, clearError } = useSensorStore();
+  const { readings, isLoading, error, fetchReadings, clearError, selectedReadingId, setSelectedReadingId } = useSensorStore();
 
   // Fetch real data on mount
   useEffect(() => {
     fetchReadings();
   }, [fetchReadings]);
 
-  // Use the latest reading (last in chronological array)
-  const latest = readings.length > 0 ? readings[readings.length - 1] : null;
+  // Use the selected reading if set, otherwise use the latest reading
+  const latest = selectedReadingId
+    ? readings.find((r) => r.id === selectedReadingId)
+    : (readings.length > 0 ? readings[readings.length - 1] : null);
 
   // Map API water_condition to theme key (Optimal / Siaga / Kritis / Tidak Diketahui)
   const kondisi = latest?.water_condition || 'Optimal';
@@ -215,8 +217,18 @@ export default function Classification() {
               Hasil Klasifikasi
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Kondisi kualitas air dan rekomendasi pakan berdasarkan pembacaan terakhir
+              {selectedReadingId
+                ? 'Menampilkan hasil klasifikasi data historis terpilih'
+                : 'Kondisi kualitas air dan rekomendasi pakan berdasarkan pembacaan terakhir'}
             </p>
+            {selectedReadingId && (
+              <button
+                onClick={() => setSelectedReadingId(null)}
+                className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 cursor-pointer inline-flex items-center gap-1 transition-all"
+              >
+                Reset ke Data Terbaru
+              </button>
+            )}
           </div>
 
           {/* Refresh button */}
