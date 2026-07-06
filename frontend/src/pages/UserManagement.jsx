@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   UserPlus,
@@ -10,82 +10,170 @@ import {
   ShieldCheck,
   Mail,
   Search,
+  Loader2,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  RefreshCw,
+  UserCog,
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import axiosClient from '../api/axiosClient';
 
 /* ──────────────────────────────────────────────
-   Static demo data (no backend logic)
+   Role & Status theme configuration
    ────────────────────────────────────────────── */
-const INITIAL_USERS = [
-  { id: 1, nama: 'Dr. I Wayan Suarjana',  email: 'suarjana@undiksha.ac.id',  role: 'Admin',    status: 'Aktif' },
-  { id: 2, nama: 'Ni Luh Putu Arimbi',    email: 'arimbi@undiksha.ac.id',    role: 'Operator', status: 'Aktif' },
-  { id: 3, nama: 'I Made Agus Wirawan',    email: 'agus.wirawan@undiksha.ac.id', role: 'Operator', status: 'Aktif' },
-  { id: 4, nama: 'Kadek Dwi Bagus Pramana', email: 'dwi.bagus@undiksha.ac.id', role: 'Viewer',  status: 'Nonaktif' },
-  { id: 5, nama: 'Putu Sri Lestari',       email: 'sri.lestari@undiksha.ac.id', role: 'Operator', status: 'Aktif' },
-  { id: 6, nama: 'I Gede Mahardika',       email: 'mahardika@undiksha.ac.id',  role: 'Viewer',   status: 'Nonaktif' },
-];
-
-const ROLES = ['Admin', 'Operator', 'Viewer'];
-
 const ROLE_THEME = {
-  Admin:    { bg: 'bg-blue-100',   text: 'text-blue-800',   icon: ShieldCheck },
-  Operator: { bg: 'bg-violet-100', text: 'text-violet-800', icon: Shield },
-  Viewer:   { bg: 'bg-slate-100',  text: 'text-slate-700',  icon: Shield },
+  admin:    { bg: 'bg-blue-100',   text: 'text-blue-800',   icon: ShieldCheck, label: 'Admin' },
+  operator: { bg: 'bg-violet-100', text: 'text-violet-800', icon: Shield,      label: 'Operator' },
+  user:     { bg: 'bg-slate-100',  text: 'text-slate-700',  icon: UserCog,     label: 'User' },
 };
 
-const STATUS_THEME = {
-  Aktif:    { bg: 'bg-emerald-100', text: 'text-emerald-800', dot: 'bg-emerald-500' },
-  Nonaktif: { bg: 'bg-red-100',     text: 'text-red-800',     dot: 'bg-red-500' },
-};
+const EMPTY_FORM = { nama: '', email: '', password: '' };
 
-const EMPTY_FORM = { nama: '', email: '', role: 'Operator', status: 'Aktif' };
+/* ──────────────────────────────────────────────
+   Error Banner
+   ────────────────────────────────────────────── */
+function ErrorBanner({ message, onRetry, onDismiss }) {
+  return (
+    <div className="mb-6 bg-red-50 border border-red-200 rounded-2xl px-5 py-4 flex items-start gap-3 shadow-sm">
+      <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+      <div className="flex-1">
+        <p className="text-sm font-semibold text-red-800">Terjadi Kesalahan</p>
+        <p className="text-xs text-red-600 mt-0.5">{message}</p>
+      </div>
+      <div className="flex gap-2 shrink-0">
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Coba Lagi
+          </button>
+        )}
+        <button
+          onClick={onDismiss}
+          className="text-xs font-medium text-red-400 hover:text-red-600 px-2 py-1.5 transition-colors cursor-pointer"
+        >
+          Tutup
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /* ──────────────────────────────────────────────
    Main Component
    ────────────────────────────────────────────── */
 export default function UserManagement() {
-  const [users, setUsers] = useState(INITIAL_USERS);
+  const [users, setUsers] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(null);
   const [search, setSearch] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  /* ── Fetch users from API ── */
+  const fetchUsers = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { data } = await axiosClient.get('/users');
+      setUsers(data.data || []);
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Gagal memuat daftar pengguna.';
+      setError(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   /* ── Filtered users ── */
   const filtered = users.filter(
     (u) =>
-      u.nama.toLowerCase().includes(search.toLowerCase()) ||
+      u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase()) ||
       u.role.toLowerCase().includes(search.toLowerCase())
   );
 
   /* ── Counters ── */
-  const activeCount = users.filter((u) => u.status === 'Aktif').length;
-  const inactiveCount = users.filter((u) => u.status === 'Nonaktif').length;
+  const operatorCount = users.filter((u) => u.role === 'operator').length;
+  const userCount = users.filter((u) => u.role === 'user').length;
+
+  /* ── Success message helper ── */
+  const showSuccess = (msg) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(''), 4000);
+  };
 
   /* ── Handlers ── */
   const handleChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingId !== null) {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === editingId ? { ...u, ...form } : u))
-      );
-      setEditingId(null);
-    } else {
-      setUsers((prev) => [{ id: Date.now(), ...form }, ...prev]);
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      if (editingId !== null) {
+        // Update existing user
+        const payload = { name: form.nama, email: form.email };
+        if (form.password.trim()) {
+          payload.password = form.password;
+        }
+        const { data } = await axiosClient.put(`/users/${editingId}`, payload);
+        setUsers((prev) =>
+          prev.map((u) => (u.id === editingId ? (data.data || { ...u, ...payload }) : u))
+        );
+        setEditingId(null);
+        showSuccess('Data pengguna berhasil diperbarui!');
+      } else {
+        // Create new operator
+        const payload = {
+          name: form.nama,
+          email: form.email,
+          password: form.password,
+        };
+        const { data } = await axiosClient.post('/users', payload);
+        setUsers((prev) => [data.data || payload, ...prev]);
+        showSuccess('Operator baru berhasil ditambahkan!');
+      }
+      setForm(EMPTY_FORM);
+      setShowForm(false);
+      setShowPassword(false);
+      // Refresh data to get accurate data from server
+      fetchUsers();
+    } catch (err) {
+      const errData = err.response?.data;
+      if (errData?.errors) {
+        const messages = Object.values(errData.errors).flat().join(' ');
+        setError(messages);
+      } else {
+        setError(errData?.message || 'Terjadi kesalahan saat menyimpan data.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-    setForm(EMPTY_FORM);
-    setShowForm(false);
   };
 
   const startEdit = (user) => {
     setEditingId(user.id);
-    setForm({ nama: user.nama, email: user.email, role: user.role, status: user.status });
+    setForm({ nama: user.name, email: user.email, password: '' });
     setShowForm(true);
+    setShowPassword(false);
     document.getElementById('user-form')?.scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -93,24 +181,26 @@ export default function UserManagement() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setShowForm(false);
+    setShowPassword(false);
+    setError(null);
   };
 
-  const confirmDelete = (id) => {
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    setShowDeleteModal(null);
+  const confirmDelete = async (id) => {
+    try {
+      await axiosClient.delete(`/users/${id}`);
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+      setShowDeleteModal(null);
+      showSuccess('Pengguna berhasil dihapus!');
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Gagal menghapus pengguna.';
+      setError(msg);
+      setShowDeleteModal(null);
+    }
   };
 
-  const toggleStatus = (id) => {
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === id
-          ? { ...u, status: u.status === 'Aktif' ? 'Nonaktif' : 'Aktif' }
-          : u
-      )
-    );
-  };
-
-  const isFormValid = form.nama.trim() !== '' && form.email.trim() !== '';
+  const isFormValid = editingId
+    ? form.nama.trim() !== '' && form.email.trim() !== ''
+    : form.nama.trim() !== '' && form.email.trim() !== '' && form.password.trim().length >= 8;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -125,7 +215,7 @@ export default function UserManagement() {
               Manajemen Pengguna
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Kelola akun pengguna sistem monitoring
+              Kelola akun operator sistem monitoring
             </p>
           </div>
           <button
@@ -137,9 +227,35 @@ export default function UserManagement() {
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-blue-700 active:scale-[0.98] transition-all shadow-sm cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
-            Tambah Pengguna
+            Tambah Operator
           </button>
         </div>
+
+        {/* ── Error Banner ── */}
+        {error && (
+          <ErrorBanner
+            message={error}
+            onRetry={fetchUsers}
+            onDismiss={() => setError(null)}
+          />
+        )}
+
+        {/* ── Success Banner ── */}
+        {successMessage && (
+          <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4 flex items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+            <Check className="w-5 h-5 text-emerald-500 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-emerald-800">Berhasil</p>
+              <p className="text-xs text-emerald-600 mt-0.5">{successMessage}</p>
+            </div>
+            <button
+              onClick={() => setSuccessMessage('')}
+              className="text-xs font-medium text-emerald-400 hover:text-emerald-600 px-2 py-1.5 transition-colors cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        )}
 
         {/* ── Summary counters ── */}
         <div className="grid grid-cols-3 gap-3 mb-6">
@@ -153,21 +269,21 @@ export default function UserManagement() {
             </div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 px-5 py-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
-              <Check className="w-5 h-5 text-emerald-600" />
+            <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-violet-600" />
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-500">Aktif</p>
-              <p className="text-xl font-extrabold text-emerald-700">{activeCount}</p>
+              <p className="text-xs font-medium text-slate-500">Operator</p>
+              <p className="text-xl font-extrabold text-violet-700">{operatorCount}</p>
             </div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 px-5 py-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
-              <X className="w-5 h-5 text-red-600" />
+            <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center">
+              <UserCog className="w-5 h-5 text-slate-600" />
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-500">Nonaktif</p>
-              <p className="text-xl font-extrabold text-red-700">{inactiveCount}</p>
+              <p className="text-xs font-medium text-slate-500">User</p>
+              <p className="text-xl font-extrabold text-slate-700">{userCount}</p>
             </div>
           </div>
         </div>
@@ -179,10 +295,12 @@ export default function UserManagement() {
             className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mb-6"
           >
             <h2 className="text-lg font-bold text-slate-900 mb-1">
-              {editingId ? 'Edit Pengguna' : 'Tambah Pengguna Baru'}
+              {editingId ? 'Edit Pengguna' : 'Tambah Operator Baru'}
             </h2>
             <p className="text-xs text-slate-500 mb-5">
-              {editingId ? 'Ubah informasi pengguna' : 'Isi data pengguna baru di bawah ini'}
+              {editingId
+                ? 'Ubah informasi pengguna. Biarkan password kosong jika tidak ingin mengubahnya.'
+                : 'Isi data operator baru. Admin menentukan password operator.'}
             </p>
 
             <form onSubmit={handleSubmit}>
@@ -214,56 +332,59 @@ export default function UserManagement() {
                       type="email"
                       value={form.email}
                       onChange={(e) => handleChange('email', e.target.value)}
-                      placeholder="email@undiksha.ac.id"
+                      placeholder="email@example.com"
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
                       required
                     />
                   </div>
                 </div>
-                {/* Role */}
-                <div>
-                  <label htmlFor="input-role" className="block text-sm font-semibold text-slate-800 mb-1.5">
-                    Role
+                {/* Password */}
+                <div className="sm:col-span-2">
+                  <label htmlFor="input-password" className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    Password {editingId && <span className="text-xs font-normal text-slate-400">(opsional — kosongkan jika tidak ingin mengubah)</span>}
                   </label>
-                  <select
-                    id="input-role"
-                    value={form.role}
-                    onChange={(e) => handleChange('role', e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm cursor-pointer"
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                </div>
-                {/* Status */}
-                <div>
-                  <label htmlFor="input-status" className="block text-sm font-semibold text-slate-800 mb-1.5">
-                    Status
-                  </label>
-                  <select
-                    id="input-status"
-                    value={form.status}
-                    onChange={(e) => handleChange('status', e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm cursor-pointer"
-                  >
-                    <option value="Aktif">Aktif</option>
-                    <option value="Nonaktif">Nonaktif</option>
-                  </select>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      id="input-password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={form.password}
+                      onChange={(e) => handleChange('password', e.target.value)}
+                      placeholder={editingId ? 'Biarkan kosong jika tidak diubah' : 'Minimal 8 karakter'}
+                      className="w-full pl-10 pr-12 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
+                      required={!editingId}
+                      minLength={editingId ? 0 : 8}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {!editingId && form.password.length > 0 && form.password.length < 8 && (
+                    <p className="text-red-500 text-xs mt-1.5 font-medium flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      Password minimal 8 karakter
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
                 <button
                   type="submit"
-                  disabled={!isFormValid}
+                  disabled={!isFormValid || isSubmitting}
                   id="user-submit-btn"
                   className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-blue-700 active:scale-[0.98] transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  {editingId ? (
+                  {isSubmitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan…</>
+                  ) : editingId ? (
                     <><Check className="w-4 h-4" /> Simpan Perubahan</>
                   ) : (
-                    <><UserPlus className="w-4 h-4" /> Tambah Pengguna</>
+                    <><UserPlus className="w-4 h-4" /> Tambah Operator</>
                   )}
                 </button>
                 <button
@@ -288,7 +409,7 @@ export default function UserManagement() {
             <div>
               <h2 className="text-lg font-bold text-slate-900">Daftar Pengguna</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                {filtered.length} pengguna ditemukan
+                {isLoading ? 'Memuat data…' : `${filtered.length} pengguna ditemukan`}
               </p>
             </div>
             <div className="relative w-full sm:w-64">
@@ -304,141 +425,134 @@ export default function UserManagement() {
             </div>
           </div>
 
+          {/* Loading */}
+          {isLoading && (
+            <div className="px-6 py-16 text-center">
+              <Loader2 className="w-8 h-8 text-blue-500 mx-auto mb-3 animate-spin" />
+              <p className="text-sm font-medium text-slate-500">Memuat daftar pengguna…</p>
+            </div>
+          )}
+
           {/* Desktop table */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="text-left px-6 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">
-                    Nama
-                  </th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="text-center px-6 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">
-                    Aksi
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((user, i) => {
-                  const role = ROLE_THEME[user.role];
-                  const status = STATUS_THEME[user.status];
-                  const RoleIcon = role.icon;
-                  return (
-                    <tr
-                      key={user.id}
-                      className={`border-b border-slate-50 hover:bg-blue-50/40 transition-colors ${
-                        i % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
-                      }`}
-                    >
-                      <td className="px-6 py-3.5">
-                        <p className="font-semibold text-slate-900">{user.nama}</p>
-                      </td>
-                      <td className="px-4 py-3.5 text-slate-600">{user.email}</td>
-                      <td className="px-4 py-3.5 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${role.bg} ${role.text}`}
-                        >
-                          <RoleIcon className="w-3.5 h-3.5" />
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <button
-                          onClick={() => toggleStatus(user.id)}
-                          className="cursor-pointer"
-                          title="Klik untuk ubah status"
-                        >
+          {!isLoading && filtered.length > 0 && (
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="text-left px-6 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">
+                      Nama
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">
+                      Role
+                    </th>
+                    <th className="text-center px-6 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">
+                      Aksi
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((user, i) => {
+                    const role = ROLE_THEME[user.role] || ROLE_THEME.user;
+                    const RoleIcon = role.icon;
+                    const isAdmin = user.role === 'admin';
+                    return (
+                      <tr
+                        key={user.id}
+                        className={`border-b border-slate-50 hover:bg-blue-50/40 transition-colors ${
+                          i % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
+                        }`}
+                      >
+                        <td className="px-6 py-3.5">
+                          <p className="font-semibold text-slate-900">{user.name}</p>
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-600">{user.email}</td>
+                        <td className="px-4 py-3.5 text-center">
                           <span
-                            className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${status.bg} ${status.text}`}
+                            className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${role.bg} ${role.text}`}
                           >
-                            <span className={`w-2 h-2 rounded-full ${status.dot}`} />
-                            {user.status}
+                            <RoleIcon className="w-3.5 h-3.5" />
+                            {role.label}
                           </span>
-                        </button>
-                      </td>
-                      <td className="px-6 py-3.5 text-center">
-                        <div className="inline-flex items-center gap-1.5">
+                        </td>
+                        <td className="px-6 py-3.5 text-center">
+                          {isAdmin ? (
+                            <span className="text-xs text-slate-400 font-medium">—</span>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                onClick={() => startEdit(user)}
+                                className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer"
+                                title="Edit"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setShowDeleteModal(user.id)}
+                                className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
+                                title="Hapus"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Mobile card list */}
+          {!isLoading && filtered.length > 0 && (
+            <div className="md:hidden divide-y divide-slate-100">
+              {filtered.map((user) => {
+                const role = ROLE_THEME[user.role] || ROLE_THEME.user;
+                const RoleIcon = role.icon;
+                const isAdmin = user.role === 'admin';
+                return (
+                  <div key={user.id} className="px-5 py-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="font-semibold text-slate-900 text-sm">{user.name}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>
+                      </div>
+                      {!isAdmin && (
+                        <div className="inline-flex items-center gap-1">
                           <button
                             onClick={() => startEdit(user)}
-                            className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer"
-                            title="Edit"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer"
                           >
-                            <Pencil className="w-4 h-4" />
+                            <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => setShowDeleteModal(user.id)}
-                            className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
-                            title="Hapus"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile card list */}
-          <div className="md:hidden divide-y divide-slate-100">
-            {filtered.map((user) => {
-              const role = ROLE_THEME[user.role];
-              const status = STATUS_THEME[user.status];
-              const RoleIcon = role.icon;
-              return (
-                <div key={user.id} className="px-5 py-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="font-semibold text-slate-900 text-sm">{user.nama}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>
+                      )}
                     </div>
-                    <div className="inline-flex items-center gap-1">
-                      <button
-                        onClick={() => startEdit(user)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setShowDeleteModal(user.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span
-                      className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${role.bg} ${role.text}`}
-                    >
-                      <RoleIcon className="w-3 h-3" />
-                      {user.role}
-                    </span>
-                    <button onClick={() => toggleStatus(user.id)} className="cursor-pointer">
+                    <div className="flex items-center gap-2 mt-2">
                       <span
-                        className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${status.bg} ${status.text}`}
+                        className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${role.bg} ${role.text}`}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
-                        {user.status}
+                        <RoleIcon className="w-3 h-3" />
+                        {role.label}
                       </span>
-                    </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
-          {filtered.length === 0 && (
+          {!isLoading && filtered.length === 0 && (
             <div className="px-6 py-16 text-center">
               <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-sm font-medium text-slate-400">

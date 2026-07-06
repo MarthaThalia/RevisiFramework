@@ -13,29 +13,39 @@ Route::prefix('v1')->group(function () {
     // ==========================================
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
-    
-    // Rute Sensor ditaruh di sini agar bisa kita test langsung dari React dan Bruno tanpa pusing soal Auth dulu
-    Route::get('/sensor-readings', [SensorReadingController::class, 'index']);
-    Route::post('/sensor-readings', [SensorReadingController::class, 'store']);
-    Route::put('/sensor-readings/{id}', [SensorReadingController::class, 'update']);
-    Route::delete('/sensor-readings/{id}', [SensorReadingController::class, 'destroy']);
-    Route::get('/sensor-status', [SensorReadingController::class, 'checkStatus']);
 
     // ==========================================
     // PROTECTED ROUTES (Wajib token Sanctum)
     // ==========================================
     Route::middleware('auth:sanctum')->group(function () {
         
-        // Endpoint Auth
+        // Endpoint Auth — Semua role (user, operator, admin)
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
-        // CRUD Kolam (Pond)
+        // CRUD Kolam (Pond) — Semua role
         Route::apiResource('ponds', PondController::class);
 
-        // CRUD Catatan Pakan (FeedLog) - Sesuai Kesepakatan: Index & Store
+        // CRUD Catatan Pakan (FeedLog) — Semua role
         Route::apiResource('feed-logs', FeedLogController::class)->only(['index', 'store']);
+
+        // ── Sensor Readings: READ — Semua role (untuk Dashboard & Klasifikasi) ──
+        Route::get('/sensor-readings', [SensorReadingController::class, 'index']);
+        Route::get('/sensor-status', [SensorReadingController::class, 'checkStatus']);
+
+        // ── Sensor Readings: WRITE — Operator & Admin saja ──
+        Route::middleware('role:operator,admin')->group(function () {
+            Route::post('/sensor-readings', [SensorReadingController::class, 'store']);
+            Route::put('/sensor-readings/{id}', [SensorReadingController::class, 'update']);
+            Route::delete('/sensor-readings/{id}', [SensorReadingController::class, 'destroy']);
+        });
         
-        // (SensorReading apiResource dihapus dari sini agar tidak bentrok dengan rute public di atas)
+        // ── Admin Only ──
+        Route::middleware('role:admin')->group(function () {
+            Route::get('/users', [AuthController::class, 'indexUsers']);
+            Route::post('/users', [AuthController::class, 'storeUser']);
+            Route::put('/users/{id}', [AuthController::class, 'updateUser']);
+            Route::delete('/users/{id}', [AuthController::class, 'destroyUser']);
+        });
     });
 });

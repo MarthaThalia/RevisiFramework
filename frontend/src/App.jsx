@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, X, ShieldAlert } from 'lucide-react';
 import useAuthStore from './store/authStore';
 import { toastEvents } from './api/axiosClient';
 import Login from './pages/Login';
@@ -26,6 +26,25 @@ function ProtectedRoute({ children }) {
 function GuestRoute({ children }) {
   const token = useAuthStore((s) => s.token);
   if (token) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
+/**
+ * Role-based route protection.
+ * Checks if the current user's role is in the list of allowed roles.
+ * If not, redirects to /dashboard with an access denied state.
+ */
+function RoleRoute({ children, allowedRoles }) {
+  const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
+
+  if (!token) return <Navigate to="/login" replace />;
+
+  const userRole = user?.role || 'user';
+  if (!allowedRoles.includes(userRole)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return children;
 }
 
@@ -93,11 +112,29 @@ export default function App() {
         <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
         <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
 
-        {/* Protected pages — require token */}
+        {/* Protected pages — require token, all roles */}
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/sensor-data" element={<ProtectedRoute><SensorData /></ProtectedRoute>} />
         <Route path="/klasifikasi" element={<ProtectedRoute><Classification /></ProtectedRoute>} />
-        <Route path="/pengguna" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+
+        {/* Role-protected pages — operator & admin only */}
+        <Route
+          path="/sensor-data"
+          element={
+            <RoleRoute allowedRoles={['operator', 'admin']}>
+              <SensorData />
+            </RoleRoute>
+          }
+        />
+
+        {/* Role-protected pages — admin only */}
+        <Route
+          path="/pengguna"
+          element={
+            <RoleRoute allowedRoles={['admin']}>
+              <UserManagement />
+            </RoleRoute>
+          }
+        />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
